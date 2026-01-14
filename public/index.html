@@ -332,12 +332,14 @@
       ]
     };
 
-    const res = await fetch(GEMINI_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: inFlightController.signal
-    });
+    
+// No frontend
+const GEMINI_ENDPOINT = '/api/gemini/generate'; // mesmo host e porta do backend
+const res = await fetch(GEMINI_ENDPOINT, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload),
+});
 
     if (!res.ok) {
       const text = await res.text().catch(() => '');

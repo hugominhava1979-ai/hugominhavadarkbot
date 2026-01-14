@@ -1,0 +1,1 @@
+const GEMINI_ENDPOINT = '/api/gemini/generate';
