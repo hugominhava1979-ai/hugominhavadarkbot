@@ -1,0 +1,401 @@
+// run `node index.js` in the terminal
+
+<!DOCTYPE html>
+<html lang="pt-pt">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DarkBot - JS Expert</title>
+
+  <!-- PDF.js (usar worker oficial) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js" defer></script>
+
+  <style>
+    :root {
+      --bg: #050508;
+      --card: #0d0d16;
+      --neon: #00d2ff;
+      --glow: rgba(0, 210, 255, 0.3);
+      --text: #e0e0e0;
+      --bot: #1a1a2e;
+      --user: #003366;
+      --danger: #ff4d4f;
+      --muted: #a0a0a0;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 16px;
+      text-align: center;
+      border-bottom: 2px solid var(--neon);
+      box-shadow: 0 0 20px var(--glow);
+    }
+    header h1 {
+      margin: 0;
+      letter-spacing: 5px;
+      color: var(--neon);
+      text-shadow: 0 0 10px var(--neon);
+      font-size: clamp(20px, 3vw, 28px);
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 900px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 16px;
+      overflow: hidden;
+      gap: 12px;
+    }
+
+    #file-loader {
+      font-size: 12px;
+      color: var(--neon);
+      text-align: center;
+    }
+    #file-loader .status { display: inline-flex; gap: 8px; align-items: center; }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid var(--glow);
+      border-top-color: var(--neon);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #chat-box {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--neon);
+      border-radius: 12px;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: inset 0 0 15px black;
+      scroll-behavior: smooth;
+    }
+
+    .msg { padding: 12px; border-radius: 8px; max-width: 80%; line-height: 1.5; }
+    .msg.bot { background: var(--bot); align-self: flex-start; border-left: 4px solid var(--neon); }
+    .msg.user { background: var(--user); align-self: flex-end; }
+    .msg.system { background: #2a1b1b; border-left: 4px solid var(--danger); }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+      background: var(--card);
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid var(--neon);
+      align-items: flex-end;
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: white;
+      outline: none;
+      resize: none;
+      height: 44px;
+      max-height: 160px;
+      line-height: 1.4;
+    }
+
+    button {
+      background: transparent;
+      color: var(--neon);
+      border: 1px solid var(--neon);
+      padding: 8px 16px;
+      cursor: pointer;
+      border-radius: 6px;
+      font-weight: bold;
+      min-width: 110px;
+      transition: all .15s ease;
+    }
+    button:hover { background: var(--neon); color: black; box-shadow: 0 0 15px var(--neon); }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+
+    pre {
+      background: #000;
+      padding: 10px;
+      border-radius: 6px;
+      overflow-x: auto;
+      border: 1px solid #333;
+      position: relative;
+      margin: 6px 0;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 13px; color: #e6e6e6; }
+    .copy-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      font-size: 11px;
+      padding: 4px 8px;
+    }
+
+    .helper {
+      color: var(--muted);
+      font-size: 11px;
+      text-align: right;
+    }
+
+    @media (max-width: 600px) {
+      .msg { max-width: 100%; }
+      button { min-width: auto; }
+    }
+  </style>
+</head>
+<body>
+<header><h1>DARK BOT</h1></header>
+
+<main>
+  <div id="file-loader">
+    <div class="status" role="status" aria-live="polite">
+      <span>Se o livro não carregar, clica aqui:</span>
+      <input type="file" id="pdf-upload" accept=".pdf" aria-label="Carregar PDF" />
+    </div>
+  </div>
+
+  <div id="chat-box" aria-live="polite" aria-label="Janela de conversa">
+    <div class="msg bot">Cordial saudações. Sou o DarkBot. Carrega o teu livro de JS para começarmos a explorar os conceitos de forma inteligente.</div>
+  </div>
+
+  <div class="input-group">
+    <textarea id="msg-input" placeholder="Escreve a tua dúvida..." aria-label="Escrever mensagem"></textarea>
+    <button id="send-btn" aria-label="Enviar mensagem">ENVIAR</button>
+  </div>
+  <div class="helper">Enter: enviar &nbsp;•&nbsp; Shift+Enter: nova linha</div>
+</main>
+
+<script>
+  // =========================
+  // Configuração / Constantes
+  // =========================
+  const PDF_WORKER = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+  const PAGE_LIMIT = 70;                 // Limite de páginas a ler do PDF
+  const CONTEXT_LIMIT_CHARS = 25000;     // Limite de contexto a enviar para o modelo
+  const GEMINI_ENDPOINT = '/api/gemini/generate'; // <-- configura no teu backend (ver exemplo abaixo)
+
+  let bookText = '';
+  let inFlightController = null; // Para cancelar requisições anteriores, se necessário
+
+  // =========================
+  // Inicialização do PDF.js
+  // =========================
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
+  }
+
+  // =========================
+  // Utilitários
+  // =========================
+  const byId = (id) => document.getElementById(id);
+
+  function setLoaderMessage(html) {
+    const loader = byId('file-loader');
+    loader.innerHTML = `<div class="status"><span class="spinner"></span><span>${html}</span></div>`;
+  }
+  function setLoaderDone(html) {
+    const loader = byId('file-loader');
+    loader.innerHTML = `<div class="status"><span>✓</span><span><b>${html}</b></span></div>`;
+  }
+
+  // Sanitização simples para evitar XSS em conteúdo dinâmico
+  function sanitize(text) {
+    return text
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
+  }
+
+  // Converte markdown de blocos de código triplos ```...``` para <pre><code>
+  function renderCodeBlocks(raw) {
+    // Captura de blocos ```lang\n...```
+    return raw.replace(/```([\w-]+)?\n([\s\S]*?)```/g, (m, lang, code) => {
+      const safe = sanitize(code.trim());
+      return `<pre><code class="${lang ? 'language-' + lang : ''}">${safe}</code><button class="copy-btn" onclick="copyCode(this)">Copiar</button></pre>`;
+    });
+  }
+
+  function addMsg(type, rawText) {
+    const chat = byId('chat-box');
+    const div = document.createElement('div');
+    div.className = `msg ${type}`;
+
+    // Primeiro convertemos blocos de código
+    let html = renderCodeBlocks(rawText);
+
+    // Depois quebramos linhas (sem quebrar <pre>)
+    html = html.split('\n').map(line => {
+      if (line.startsWith('<pre>') || line.startsWith('<pre ')) return line;
+      return sanitize(line);
+    }).join('<br>');
+
+    // Pequena regra: manter <pre> intacto (já sanitizado)
+    html = html.replace(/&lt;pre&gt;|&lt;\/pre&gt;|&lt;code.*?&gt;|&lt;\/code&gt;|&lt;button.*?&gt;|&lt;\/button&gt;/g, (m) =>
+      m.replace('&lt;', '<').replace('&gt;', '>')
+    );
+
+    div.innerHTML = html;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+    return div;
+  }
+
+  function addThinking() {
+    return addMsg('bot', `<span class="spinner"></span>&nbsp;A analisar...`);
+  }
+
+  function copyCode(btn) {
+    const codeEl = btn.previousElementSibling;
+    const text = codeEl?.innerText ?? '';
+    navigator.clipboard.writeText(text).then(() => {
+      const original = btn.textContent;
+      btn.textContent = 'Feito!';
+      setTimeout(() => { btn.textContent = original; }, 1800);
+    });
+  }
+  window.copyCode = copyCode; // expõe para onclick inline
+
+  function autoResizeTextarea(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }
+
+  // =========================
+  // PDF: Processamento
+  // =========================
+  async function processPDF(file) {
+    try {
+      setLoaderMessage('A ler livro... aguarda.');
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      let fullText = '';
+      const max = Math.min(pdf.numPages, PAGE_LIMIT);
+
+      for (let i = 1; i <= max; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        // Juntar por blocos e manter algum espaçamento
+        const pageText = content.items.map(s => s.str).join(' ').replace(/\s+/g, ' ').trim();
+        if (pageText) fullText += pageText + '\n';
+      }
+
+      bookText = fullText;
+      setLoaderDone('Livro sincronizado. Podes perguntar.');
+    } catch (err) {
+      console.error(err);
+      byId('file-loader').innerHTML = `<span style="color: var(--danger)">Falha ao ler o PDF. Garante que é um PDF válido.</span>`;
+    }
+  }
+
+  // =========================
+  // Modelo: Perguntar ao backend
+  // =========================
+  async function askModel(query) {
+    // Cancela requisição anterior se existir
+    if (inFlightController) inFlightController.abort();
+    inFlightController = new AbortController();
+
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text:
+                `Age como DarkBot: cordial, empático e direto. ` +
+                `Ajuda com JavaScript usando o contexto do livro quando relevante. ` +
+                `Se não houver contexto suficiente, explica o conceito por ti e sugere exemplos.\n\n` +
+                `Contexto (podes usar trechos conforme necessário):\n` +
+                `${(bookText || '').slice(0, CONTEXT_LIMIT_CHARS)}\n\n` +
+                `Pergunta do utilizador:\n${query}`
+            }
+          ]
+        }
+      ]
+    };
+
+    const res = await fetch(GEMINI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: inFlightController.signal
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status} - ${text || 'Falha ao contactar o serviço'}`);
+    }
+
+    return res.json();
+  }
+
+  async function handleSend() {
+    const input = byId('msg-input');
+    const query = input.value.trim();
+    if (!query) return;
+
+    addMsg('user', query);
+    input.value = '';
+    autoResizeTextarea(input);
+    input.focus();
+
+    const thinking = addThinking();
+
+    try {
+      const data = await askModel(query);
+      // Defender contra respostas diferentes (estrutura variável)
+      const text =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        data?.output_text || // caso o backend normalize
+        'Não consegui obter uma resposta útil desta vez. Tenta reformular a tua pergunta.';
+
+      thinking.remove();
+      addMsg('bot', text);
+    } catch (err) {
+      console.error(err);
+      thinking.remove();
+      addMsg('system', `Erro de ligação ao modelo. ${sanitize(err.message)}. Verifica a chave no servidor e a ligação à internet.`);
+    }
+  }
+
+  // =========================
+  // Event Listeners
+  // =========================
+  byId('pdf-upload').addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (file) processPDF(file);
+  });
+
+  const inputEl = byId('msg-input');
+  inputEl.addEventListener('input', () => autoResizeTextarea(inputEl));
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      byId('send-btn').click();
+    }
+  });
+
+  byId('send-btn').addEventListener('click', handleSend);
+</script>
+</body>
+</html>
+
+
