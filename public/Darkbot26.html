@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Deep Seek — Dark Bot</title>
+  <style>
+    :root{
+      --bg:#0b0f17; --panel:#0f1720; --muted:#9aa7bf; --accent:#ff8a00;
+      --glass: rgba(255,255,255,0.03); --radius:12px; font-family:Inter,Segoe UI,Roboto,Arial,sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0; min-height:100vh; background:linear-gradient(180deg,#05060a,#0b0f17); color:#e6eef8}
+    .wrap{max-width:980px; margin:28px auto; padding:18px}
+    header{display:flex; align-items:center; gap:12px; margin-bottom:18px}
+    .logo{width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#ffb86b,#ff8a00);display:flex;align-items:center;justify-content:center;color:#071029;font-weight:800}
+    h1{font-size:18px;margin:0}
+    .subtitle{color:var(--muted); font-size:13px}
+
+    .chat-panel{background:var(--panel); border-radius:var(--radius); padding:16px; box-shadow:0 10px 30px rgba(2,6,23,0.6); border:1px solid var(--glass)}
+    .messages{height:60vh; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:12px}
+    .msg{max-width:78%; padding:12px; border-radius:10px; line-height:1.4}
+    .msg.user{align-self:flex-end; background:linear-gradient(90deg,#0b1220,#0f1724); border:1px solid rgba(255,255,255,0.02)}
+    .msg.bot{align-self:flex-start; background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); color:#e6eef8; border:1px solid rgba(255,255,255,0.03)}
+    .meta{font-size:12px;color:var(--muted); margin-bottom:6px}
+
+    .composer{display:flex; gap:8px; margin-top:12px}
+    .composer textarea{flex:1; min-height:48px; max-height:140px; resize:vertical; padding:10px; border-radius:10px; border:none; background:#071022; color:#e6eef8}
+    .composer button{padding:10px 14px; border-radius:10px; border:none; background:linear-gradient(90deg,#ffb86b,#ff8a00); color:#071029; font-weight:700; cursor:pointer}
+
+    .small{font-size:12px;color:var(--muted); margin-top:8px}
+    @media (max-width:720px){
+      .messages{height:55vh}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo">DS</div>
+      <div>
+        <h1>Deep Seek — Dark Bot</h1>
+        <div class="subtitle">Conversa empática e explicativa com IA</div>
+      </div>
+    </header>
+
+    <main class="chat-panel" role="main" aria-live="polite">
+      <div id="messages" class="messages" aria-label="Mensagens do chat"></div>
+
+      <div class="composer" role="form" aria-label="Enviar mensagem">
+        <textarea id="input" placeholder="Escreve aqui... (ex.: explica-me como funciona X)" aria-label="Mensagem"></textarea>
+        <button id="sendBtn">Enviar</button>
+      </div>
+
+      <div class="small">O bot é empático, cordial e procura manter a conversa. Em produção, a chave da API fica no servidor.</div>
+    </main>
+  </div>
+
+  <script>
+    // Utilitários simples
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
+
+    function appendMessage(role, text){
+      const el = document.createElement('div');
+      el.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = role === 'user' ? 'Tu' : 'Deep Seek';
+      el.appendChild(meta);
+      const body = document.createElement('div');
+      body.innerHTML = text.replace(/\n/g,'<br>');
+      el.appendChild(body);
+      messagesEl.appendChild(el);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    // Conversa local (contexto) — mantém histórico curto no frontend
+    const conversation = [];
+
+    async function sendMessage(text){
+      if(!text || !text.trim()) return;
+      appendMessage('user', escapeHtml(text));
+      conversation.push({role:'user', content:text});
+      inputEl.value = '';
+      sendBtn.disabled = true;
+
+      // Indicador de typing
+      const typingEl = document.createElement('div');
+      typingEl.className = 'msg bot';
+      typingEl.innerHTML = '<div class="meta">Deep Seek</div><div>Escrevendo…</div>';
+      messagesEl.appendChild(typingEl);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+
+      try {
+        const resp = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({messages: conversation})
+        });
+
+        if(!resp.ok){
+          const txt = await resp.text();
+          typingEl.remove();
+          appendMessage('bot', 'Erro ao contactar o servidor: ' + resp.status + ' — ' + escapeHtml(txt));
+          sendBtn.disabled = false;
+          return;
+        }
+
+        const data = await resp.json();
+        // espera que o backend devolva { reply: "texto", role: "assistant" }
+        typingEl.remove();
+        appendMessage('bot', escapeHtml(data.reply));
+        conversation.push({role:'assistant', content:data.reply});
+      } catch (err) {
+        typingEl.remove();
+        appendMessage('bot', 'Erro de rede. Verifica a ligação e o servidor.');
+        console.error(err);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', ()=> sendMessage(inputEl.value));
+    inputEl.addEventListener('keydown', (e)=> {
+      if(e.key === 'Enter' && !e.shiftKey){
+        e.preventDefault();
+        sendMessage(inputEl.value);
+      }
+    });
+
+    // Mensagem inicial
+    appendMessage('bot', 'Olá — sou o Deep Seek. Posso ajudar-te com explicações, orientação e conversas empáticas. Em que posso ajudar hoje?');
+
+    // Escapar HTML simples
+    function escapeHtml(s){
+      if(!s) return '';
+      return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+    }
+  </script>
+</body>
+</html>
